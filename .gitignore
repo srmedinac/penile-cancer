@@ -1,0 +1,17 @@
+# data & heavy outputs — never commit
+trident_output/
+histoplus_output/
+*.svs
+*.h5
+*.json
+!**/*.example.json
+*.csv
+*.parquet
+
+# logs
+logs/
+
+# python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
