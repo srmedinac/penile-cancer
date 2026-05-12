@@ -102,7 +102,7 @@ def process_slide(name: str, patches_h5: Path, cell_masks_json: Path,
     """Return (patch_df, slide_row, n_cells_outside)."""
     tiling = load_trident_tiling(patches_h5)
     centroids, types, inference_mpp = load_cells(cell_masks_json, min_confidence)
-    side = tiling.tile_size
+    side = tiling.patch_size_level0
 
     # bin every cell to a Trident patch by centroid
     patch_index = {(int(x // side), int(y // side)): i for i, (x, y) in enumerate(tiling.coords_px)}

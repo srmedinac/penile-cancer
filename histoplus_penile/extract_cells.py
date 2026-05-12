@@ -35,6 +35,7 @@ from histoplus_penile.trident_io import (
     iter_trident_slides,
     load_trident_tiling,
     segmentor_mpp_for_tiling,
+    to_histoplus_coords,
 )
 
 CELL_MASKS_FILENAME = "cell_masks.json"      # matches histoplus.helpers.constants.OutputFileType
@@ -89,20 +90,22 @@ def extract_one(
         segmentor_cache[mpp] = build_segmentor(mpp)
     segmentor = segmentor_cache[mpp]
 
+    hp = to_histoplus_coords(tiling)
     print(
         f"[{name}] {tiling.n_patches} Trident patches "
-        f"(level0 {tiling.level0_width}x{tiling.level0_height}, "
-        f"patch {tiling.tile_size}px, dz_level {tiling.deepzoom_level}); extracting cells...",
+        f"({tiling.patch_size_level0}px @ level0 {tiling.level0_width}x{tiling.level0_height}) "
+        f"-> {hp.n_inference_tiles} HistoPLUS {hp.tile_size}px inference tiles "
+        f"at dz_level {hp.deepzoom_level}; extracting cells...",
         flush=True,
     )
     slide = openslide.OpenSlide(str(wsi_path))
     try:
         result = extract(
             slide=slide,
-            coords=tiling.coords_tiles,
-            deepzoom_level=tiling.deepzoom_level,
+            coords=hp.coords_tiles,
+            deepzoom_level=hp.deepzoom_level,
             segmentor=segmentor,
-            tile_size=tiling.tile_size,
+            tile_size=hp.tile_size,
             n_workers=n_workers,
             batch_size=batch_size,
             verbose=verbose,

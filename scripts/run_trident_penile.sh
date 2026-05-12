@@ -39,7 +39,7 @@ conda activate trident
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True   # reduce CUDA fragmentation on the 24 GB card
 
 TRIDENT_DIR="/home/smedin7/trident"
-SRC_WSI="/home/smedin7/g_drive/emory_datasets/rad_path_data/gu/penile/mdacc/curtis-pettaway/MDACC-Penile-DICOMS-and-H&Es/40x_Niki"
+SRC_WSI="/home/smedin7/g_drive/emory_datasets/rad_path_data/gu/penile/mdacc/curtis-pettaway/40x_Niki"
 LOCAL_WSI="/tmp/penile_wsi_local"
 JOB_DIR="/home/smedin7/Documents/penile/trident_output"
 
