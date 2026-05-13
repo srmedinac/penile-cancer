@@ -24,42 +24,15 @@ MORPH_COLUMNS = [
 ]
 
 
-def _flatten_rings(rings: list[np.ndarray]) -> tuple[np.ndarray, np.ndarray]:
-    """Concatenate polygon rings into one (M, 2) array + per-polygon offsets.
-
-    The closing vertex (a repeat of the first) is dropped from each ring.
-    Returns ``(coords, offsets)`` where ``offsets`` has length ``len(rings)+1``.
-    """
-    parts, lengths = [], []
-    for r in rings:
-        a = np.asarray(r, dtype=np.float64)
-        if len(a) >= 2 and np.array_equal(a[0], a[-1]):
-            a = a[:-1]
-        parts.append(a)
-        lengths.append(len(a))
-    coords = np.concatenate(parts, axis=0) if parts else np.zeros((0, 2))
-    offsets = np.concatenate([[0], np.cumsum(lengths)])
-    return coords, offsets
-
-
-def describe(
-    rings: list[np.ndarray], mpp: float, *, with_solidity: bool = True
-) -> tuple[np.ndarray, dict[str, np.ndarray]]:
-    """Describe a list of polygon rings (closing vertices are handled either way).
-
-    Returns ``(centroids_um, descriptors)`` -- ``centroids_um`` is an ``(n, 2)``
-    array of area-centroids in micrometres, ``descriptors`` a dict of per-polygon
-    arrays keyed by :data:`MORPH_COLUMNS`.
-    """
-    coords, off = _flatten_rings(rings)
-    return describe_flat(coords, off, mpp, with_solidity=with_solidity)
-
-
 def describe_flat(
-    coords: np.ndarray, off: np.ndarray, mpp: float, *, with_solidity: bool = True
+    coords: np.ndarray, off: np.ndarray, mpp: float
 ) -> tuple[np.ndarray, dict[str, np.ndarray]]:
-    """Like :func:`describe` but on pre-flattened input: ``coords`` is ``(M, 2)``
-    and ``off`` is the length-``n+1`` offsets array (no repeated closing vertex).
+    """Describe a batch of polygons given as a flat ``(M, 2)`` vertex array and
+    a length-``n+1`` offsets array (no repeated closing vertex).
+
+    Returns ``(centroids_um, descriptors)`` -- ``centroids_um`` is the per-polygon
+    area-centroid in micrometres, ``descriptors`` a dict of per-polygon arrays
+    keyed by :data:`MORPH_COLUMNS`.
     """
     n = len(off) - 1
     if n == 0:
@@ -113,10 +86,7 @@ def describe_flat(
     with np.errstate(invalid="ignore", divide="ignore"):
         circularity = 4.0 * np.pi * area / np.maximum(perimeter * perimeter, 1e-9)
 
-    if with_solidity:
-        solidity = _solidity(coords, off, area)
-    else:
-        solidity = np.full(n, np.nan)
+    solidity = _solidity(coords, off, area)
 
     px2um, px2um2 = float(mpp), float(mpp) ** 2
     out = {

@@ -18,7 +18,7 @@ ROLE_COLORS = {
 }
 
 
-def _new_ax(ax, xy, slide_path=None):
+def _new_ax(ax, slide_path=None):
     import matplotlib.pyplot as plt
 
     if ax is None:
@@ -39,7 +39,8 @@ def _new_ax(ax, xy, slide_path=None):
         except Exception:
             pass
     ax.set_aspect("equal")
-    ax.invert_yaxis() if extent is None else None
+    if extent is None:
+        ax.invert_yaxis()
     for spine in ("top", "right"):
         ax.spines[spine].set_visible(False)
     ax.set_xlabel("x (µm)")
@@ -50,7 +51,7 @@ def _new_ax(ax, xy, slide_path=None):
 
 def plot_cells(cells, *, by="role", ax=None, slide_path=None, s=1.0):
     """Scatter of cell centroids coloured by ``role`` (or any column)."""
-    ax = _new_ax(ax, cells[["cx", "cy"]].to_numpy(), slide_path)
+    ax = _new_ax(ax, slide_path)
     if by == "role":
         for r, sub in cells.groupby("role", observed=True):
             ax.scatter(sub["cx"], sub["cy"], s=s, c=ROLE_COLORS.get(r, "#999999"), label=r, linewidths=0)
@@ -67,7 +68,7 @@ def plot_graph(cells, *, max_edge_um=50.0, ax=None, slide_path=None, edge_alpha=
 
     xy = cells[["cx", "cy"]].to_numpy(dtype=float)
     cg = G.build_graph(xy, max_edge_um=max_edge_um)
-    ax = _new_ax(ax, xy, slide_path)
+    ax = _new_ax(ax, slide_path)
     e = cg.edges
     if len(e) > max_edges:
         e = e[np.random.default_rng(0).choice(len(e), max_edges, replace=False)]
@@ -103,7 +104,7 @@ def plot_heterogeneity(cells, feature="area", *, max_edge_um=50.0, ax=None, slid
     v = cells[feature].to_numpy(dtype=float)
     med = np.nanmedian(v)
     nd = G.neighbor_dispersion(cg, np.where(np.isfinite(v), v, med if np.isfinite(med) else 0.0))
-    ax = _new_ax(ax, xy, slide_path)
+    ax = _new_ax(ax, slide_path)
     vmax = np.nanpercentile(nd, 98)
     sc = ax.scatter(xy[:, 0], xy[:, 1], s=1.2, c=nd, cmap="inferno", vmax=vmax, linewidths=0)
     ax.figure.colorbar(sc, ax=ax, shrink=0.7, label=f"{feature} neighbourhood dispersion")

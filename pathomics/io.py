@@ -163,7 +163,6 @@ def load_cells(
                            "cx": centroids[:, 0], "cy": centroids[:, 1], **morph})
         df["role"] = pd.Categorical([roles.get(t, "other") for t in df["cell_type"]])
         df = df[["cell_type", "role", "confidence", "cx", "cy", *morphology.MORPH_COLUMNS]]
-        df.attrs["mpp"] = mpp
         if cache:
             df.to_parquet(cache_path, index=False)
 

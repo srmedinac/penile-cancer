@@ -1,7 +1,7 @@
 """``pathomics`` -- WSI-level handcrafted features from cell segmentations.
 
 Two interpretable feature families on top of a pruned-Delaunay cell graph:
-nuclear morphological heterogeneity (``het__*``) and immune spatial
+nuclear morphological heterogeneity (``diversity__*``) and immune spatial
 organisation / spaTIL v2 (``spatil__*``), plus composition/morphometry
 covariates. Cancer-agnostic: the only domain knowledge is the cell-type ->
 role mapping in :data:`pathomics.io.DEFAULT_ROLES`.

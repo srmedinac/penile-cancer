@@ -111,30 +111,30 @@ Parameters: `min_confidence=0.0`, `max_edge_um=50`, `min_cluster=5`, `near_um=20
 
 ### Feature catalogue
 
-`<family>__<quantity>[__<stat>]`. Stats (when present): `mean / std / p10 / p50 / p90 / skew`. Morphology channels: `area, perimeter, major_axis, minor_axis, equiv_diameter` (µm / µm²) and `eccentricity, circularity, solidity, extent` (unitless). Roles: `immune, tumor, stroma, epithelial, endothelium, other`.
+Names follow `<family>__<quantity>[__<stat>]`. Stats (when present): `mean / std / p10 / p50 / p90 / skew`. Morphology channels: `area, perimeter, major_axis, minor_axis, equiv_diameter` (µm / µm²) and `eccentricity, circularity, solidity, extent` (unitless). Roles: `immune, tumor, stroma, epithelial, endothelium, other`.
 
 | family | n | what's in it |
 |---|---:|---|
-| `meta__` | 3 | `n_cells`, `tissue_area_mm2`, `mean_degree` |
-| `comp__` | 10 | `n_cells`, `density_per_mm2`, `role_entropy`, `tumor_immune_ratio`, plus `<role>_frac` per role |
-| `morph_global__` | 25 | 5 channels (area, eccentricity, circularity, solidity, major_axis) × {mean, std, p10, p90, skew} |
-| `morph_tumor__` | 12 | same for tumour cells only: 3 channels (area, eccentricity, circularity) × {mean, std, p10, p90} |
-| `het__` | 46 | nuclear morphological heterogeneity — see below |
-| `spatil__` | 49 | immune spatial organisation — see below |
+| `slide__` | 3 | `n_cells`, `tissue_area_mm2`, `mean_neighbors_per_cell` |
+| `comp__` | 9 | `density_per_mm2`, `<role>_frac` (×6), `tumor_immune_ratio`, `role_entropy` |
+| `morph__` | 25 | bulk nuclear morphometry — 5 channels (`area`, `eccentricity`, `circularity`, `solidity`, `major_axis`) × {mean, std, p10, p90, skew} |
+| `morph_tumor__` | 12 | same restricted to the tumour compartment — 3 channels (`area`, `eccentricity`, `circularity`) × {mean, std, p10, p90} |
+| `diversity__` | 46 | nuclear morphological heterogeneity (next table) |
+| `spatil__` | 49 | immune spatial organisation (next table) |
 
-**`het__` (46).**
+**`diversity__` (46).** How variable nuclear shape is locally and across cell-type boundaries.
 
 | pattern | meaning |
 |---|---|
-| `<channel>_nbhd_disp__{mean,std,p10,p90}` | within-neighbourhood SD of `channel`, aggregated across cells |
-| `<channel>_heterotypic_contrast__{mean,std,p10,p90}` | `|Δchannel|` over Delaunay edges that cross a cell-type boundary, aggregated |
-| `local_type_entropy__{mean,std,p50,p90}` | Shannon entropy of cell-type composition in each cell's 1-hop neighbourhood |
-| `local_role_mixing__mean` | `1 − max_role_fraction` over neighbourhoods |
-| `heterotypic_edge_frac` | fraction of Delaunay edges crossing a cell-type boundary |
+| `<channel>_local_sd__{mean,std,p10,p90}` | within-neighbourhood SD of `channel`, aggregated across cells |
+| `<channel>_at_type_boundary__{mean,std,p10,p90}` | `\|Δchannel\|` across Delaunay edges that cross a cell-type boundary |
+| `cell_type_diversity__{mean,std,p50,p90}` | Shannon entropy of cell-type composition in each cell's 1-hop neighbourhood |
+| `neighborhood_mixedness__mean` | `1 − max_role_fraction` in the neighbourhood, averaged across cells |
+| `cross_type_edge_frac` | fraction of Delaunay edges crossing a cell-type boundary |
 
-**`spatil__` (49).**
+**`spatil__` (49).** Spatial organisation of immune relative to tumour and stroma.
 
-Per-population clusters (Delaunay components ≥ 5 cells), 6 features × {immune, tumor, stroma} = 18:
+*Per-population clusters* — Delaunay-connected components ≥ 5 cells, 6 features × {immune, tumor, stroma} = 18:
 
 | feature | meaning |
 |---|---|
@@ -142,23 +142,23 @@ Per-population clusters (Delaunay components ≥ 5 cells), 6 features × {immune
 | `<role>__clustered_frac` | fraction of role cells in a cluster |
 | `<role>__mean_cluster_size`, `<role>__largest_cluster_size` | cells per cluster |
 | `<role>__mean_cluster_area_mm2` | convex-hull area |
-| `<role>__mean_cluster_density` | cells per µm² in-hull |
+| `<role>__mean_cluster_density` | cells per µm² inside the hull |
 
-Pairwise nearest-neighbour, 4 features × 3 ordered pairs ({immune→tumor, immune→stroma, tumor→stroma}) = 12: `<A>_to_<B>__nndist_um__{median, p10, p90}` and `<A>_near_<B>__frac` (within `near_um=20`).
+*Pairwise nearest-neighbour*, 4 features × 3 ordered pairs ({immune→tumor, immune→stroma, tumor→stroma}) = 12: `<A>_to_<B>__nndist_um__{median, p10, p90}` and `<A>_near_<B>__frac` (within `near_um = 20`).
 
-Cluster-cluster hull overlap, 2 features × 3 pairs = 6: `<A>cl_intersect_<B>cl__frac`, `<A>cl_overlap_<B>cl__mean_ratio`.
+*Cluster-cluster hull overlap*, 2 features × 3 pairs = 6: `<A>_cluster_meets_<B>_cluster__frac` (do the hulls touch at all) and `<A>_cluster_overlap_<B>_cluster__mean_ratio` (mean intersection area / A-hull area).
 
-Infiltration, homophily, assortativity (13):
+*Infiltration and spatial preference* (13):
 
 | feature | meaning |
 |---|---|
 | `tumor_local_immune_frac__{mean,std,p50,p90}` | immune fraction in each tumour cell's neighbourhood. `mean` = overall infiltration; `std`/`p90` = its spatial heterogeneity |
-| `tumor_adj_immune_frac` | fraction of tumour cells with ≥ 1 immune Delaunay neighbour |
+| `tumor_with_immune_neighbor_frac` | fraction of tumour cells with ≥ 1 immune Delaunay neighbour |
 | `intratumoral_vs_stromal_immune` | ratio of immune-near-tumor frac to immune-near-stroma frac |
-| `<role>_homophily` | mean fraction of same-role neighbours, per role |
-| `immune_tumor_assortativity` | `log(observed / expected)` of immune–tumour edges vs marginals. Negative ⇒ immune-excluded |
-| `immune_dispersion_index` | mean immune–immune NN distance / random expectation. > 1 dispersed, < 1 clumped |
-| `immune_cluster_compactness__mean` | `P²/(4πA)` of immune cluster hulls (1 = circle) — proxy for TLS-like aggregates |
+| `<role>_same_role_frac` | mean fraction of same-role neighbours, per role |
+| `immune_tumor_edge_enrichment` | `log(observed / expected)` of immune–tumour edges vs the chance level given the marginals. Negative ⇒ immune-excluded |
+| `immune_spatial_dispersion` | observed mean immune–immune NN distance / random expectation. > 1 dispersed, < 1 clumped |
+| `immune_cluster_roundness__mean` | `4πA/P²` of immune-cluster hulls (0 = elongated, 1 = perfect circle) — proxy for TLS-like aggregates |
 | `largest_immune_cluster_area_mm2` | area of the biggest immune aggregate |
 
 ## Status

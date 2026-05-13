@@ -57,7 +57,7 @@ def main(argv=None):
         cells = load_cells(path, mpp=args.mpp, min_confidence=args.min_confidence, rebuild=args.rebuild_cache)
         feats = extract_features(cells, max_edge_um=args.max_edge_um, min_cluster=args.min_cluster, near_um=args.near_um)
         rows.append({"slide": name, **feats})
-        print(f"  {name}: {len(cells):>9,} cells  {feats.get('meta__tissue_area_mm2', float('nan')):7.1f} mm²  {time.time()-t0:6.1f}s")
+        print(f"  {name}: {len(cells):>9,} cells  {feats.get('slide__tissue_area_mm2', float('nan')):7.1f} mm²  {time.time()-t0:6.1f}s")
 
     df = pd.DataFrame(rows).set_index("slide").sort_index()
     args.out.parent.mkdir(parents=True, exist_ok=True)

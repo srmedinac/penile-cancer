@@ -2,7 +2,7 @@
 
 Two interpretable families, both built on the pruned-Delaunay cell graph:
 
-* ``het__*``  -- nuclear morphological heterogeneity (successor to the
+* ``diversity__*``  -- nuclear morphological heterogeneity (successor to the
   "cellular diversity" features): how variable nuclear shape is within local
   cell neighbourhoods, and how morphologically distinct neighbouring nuclei of
   different types are.
@@ -12,7 +12,7 @@ Two interpretable families, both built on the pruned-Delaunay cell graph:
   immune cells, including how *heterogeneous* that infiltration is across the
   slide.
 
-Plus a small block of ``comp__`` / ``morph_global__`` / ``morph_tumor__``
+Plus a small block of ``comp__`` / ``morph__`` / ``morph_tumor__``
 context features (abundances and bulk morphometry) that any survival model
 wants as covariates and that cost nothing to compute.
 
@@ -28,13 +28,12 @@ import shapely
 from scipy import stats as _stats
 
 from . import graph as G
-from .morphology import MORPH_COLUMNS
 
-# morphology channels used for heterogeneity (a deliberately small, low-redundancy set)
-HET_FEATS = ["area", "eccentricity", "circularity", "solidity", "major_axis"]
-# morphology channels reported in bulk and for the tumour compartment
-GLOBAL_FEATS = ["area", "eccentricity", "circularity", "solidity", "major_axis"]
-TUMOR_FEATS = ["area", "eccentricity", "circularity"]
+# morphology channels we report in bulk and use for heterogeneity --
+# a deliberately small, low-redundancy set; same list for both views.
+MORPH_CHANNELS = ["area", "eccentricity", "circularity", "solidity", "major_axis"]
+# subset used for the tumour-only morphology block
+TUMOR_MORPH_CHANNELS = ["area", "eccentricity", "circularity"]
 
 ROLES = ["immune", "tumor", "stroma", "epithelial", "endothelium", "other"]
 SPATIL_ROLES = ["immune", "tumor", "stroma"]
@@ -102,52 +101,52 @@ def _composition(df: pd.DataFrame, tissue_mm2: float) -> dict[str, float]:
     n = len(df)
     role_counts = df["role"].value_counts()
     fracs = {r: float(role_counts.get(r, 0)) / max(n, 1) for r in ROLES}
-    out = {"comp__n_cells": float(n), "comp__density_per_mm2": n / (tissue_mm2 + _EPS) if np.isfinite(tissue_mm2) else np.nan}
+    out = {"comp__density_per_mm2": n / (tissue_mm2 + _EPS) if np.isfinite(tissue_mm2) else np.nan}
     out |= {f"comp__{r}_frac": fracs[r] for r in ROLES}
     out["comp__tumor_immune_ratio"] = fracs["tumor"] / (fracs["immune"] + _EPS)
     out["comp__role_entropy"] = float(_shannon(np.array([fracs[r] for r in ROLES])))
     return out
 
 
-def _morph_global(df: pd.DataFrame) -> dict[str, float]:
+def _morphometry(df: pd.DataFrame) -> dict[str, float]:
     out: dict[str, float] = {}
-    for f in GLOBAL_FEATS:
-        out |= _stat_block(df[f].to_numpy(), f"morph_global__{f}", with_skew=True)
+    for f in MORPH_CHANNELS:
+        out |= _stat_block(df[f].to_numpy(), f"morph__{f}", with_skew=True)
     tum = df.loc[df["role"] == "tumor"]
-    for f in TUMOR_FEATS:
+    for f in TUMOR_MORPH_CHANNELS:
         out |= _stat_block(tum[f].to_numpy() if len(tum) >= 20 else np.array([]), f"morph_tumor__{f}")
     return out
 
 
-def _heterogeneity(df: pd.DataFrame, cg: G.CellGraph) -> dict[str, float]:
+def _diversity(df: pd.DataFrame, cg: G.CellGraph) -> dict[str, float]:
     out: dict[str, float] = {}
     cell_types = list(df["cell_type"].cat.categories) if hasattr(df["cell_type"], "cat") else sorted(df["cell_type"].unique())
     # within-neighbourhood morphological dispersion, and cross-type contrast on edges
     ei, ej = cg.edges[:, 0], cg.edges[:, 1]
     types = df["cell_type"].to_numpy()
     diff_type = types[ei] != types[ej]
-    for f in HET_FEATS:
+    for f in MORPH_CHANNELS:
         vals = df[f].to_numpy(dtype=float)
         v = np.where(np.isfinite(vals), vals, np.nan)
         # neighbour_dispersion ignores NaNs poorly, so impute per-feature median for this op only
         med = np.nanmedian(v) if np.isfinite(np.nanmedian(v)) else 0.0
         nd = G.neighbor_dispersion(cg, np.where(np.isfinite(v), v, med))
-        out |= _stat_block(nd, f"het__{f}_nbhd_disp")
+        out |= _stat_block(nd, f"diversity__{f}_local_sd")
         if len(cg.edges):
             contrast = np.abs(vals[ei] - vals[ej])[diff_type]
-            out |= _stat_block(contrast, f"het__{f}_heterotypic_contrast")
+            out |= _stat_block(contrast, f"diversity__{f}_at_type_boundary")
         else:
-            out |= _stat_block(np.array([]), f"het__{f}_heterotypic_contrast")
+            out |= _stat_block(np.array([]), f"diversity__{f}_at_type_boundary")
     # local cell-type entropy (composition of the immediate neighbourhood)
     oh_type = G.onehot(df["cell_type"].to_numpy(), cell_types)
     nbhd_type = G.neighbor_mean(cg, oh_type, include_self=False)
-    out |= _stat_block(_shannon(nbhd_type, axis=1), "het__local_type_entropy", lo=50)
+    out |= _stat_block(_shannon(nbhd_type, axis=1), "diversity__cell_type_diversity", lo=50)
     # local role mixing: 1 - dominant role fraction in the neighbourhood
     oh_role = G.onehot(df["role"].to_numpy(), ROLES)
     nbhd_role = G.neighbor_mean(cg, oh_role, include_self=False)
     valid = np.isfinite(nbhd_role).all(1)
-    out["het__local_role_mixing__mean"] = float((1.0 - nbhd_role[valid].max(1)).mean()) if valid.any() else np.nan
-    out["het__heterotypic_edge_frac"] = float(diff_type.mean()) if len(cg.edges) else np.nan
+    out["diversity__neighborhood_mixedness__mean"] = float((1.0 - nbhd_role[valid].max(1)).mean()) if valid.any() else np.nan
+    out["diversity__cross_type_edge_frac"] = float(diff_type.mean()) if len(cg.edges) else np.nan
     return out
 
 
@@ -186,12 +185,13 @@ def _spatil(df: pd.DataFrame, cg: G.CellGraph, *, max_edge_um: float, min_cluste
         with np.errstate(invalid="ignore", divide="ignore"):
             dens = s["sizes"] / (s["areas_mm2"] * 1e6 + _EPS)  # cells per um^2
         out[f"spatil__{r}__mean_cluster_density"] = float(np.nanmean(dens)) if len(dens) else np.nan
-    # immune-aggregate compactness (round, dense aggregates ~ tertiary lymphoid structures)
-    comp = []
+    # immune-aggregate roundness: 4*pi*A / P^2 in [0, 1], 1 = perfect circle
+    # (round, dense aggregates ~ tertiary lymphoid structures)
+    rnd = []
     for h in summ["immune"]["hulls"]:
-        if h is not None and h.area > 0:
-            comp.append(h.length ** 2 / (4.0 * np.pi * h.area))
-    out["spatil__immune_cluster_compactness__mean"] = float(np.mean(comp)) if comp else np.nan
+        if h is not None and h.area > 0 and h.length > 0:
+            rnd.append(4.0 * np.pi * h.area / (h.length ** 2))
+    out["spatil__immune_cluster_roundness__mean"] = float(np.mean(rnd)) if rnd else np.nan
     out["spatil__largest_immune_cluster_area_mm2"] = (
         float(summ["immune"]["areas_mm2"][np.argmax(summ["immune"]["sizes"])]) if len(summ["immune"]["sizes"]) else 0.0
     )
@@ -219,11 +219,11 @@ def _spatil(df: pd.DataFrame, cg: G.CellGraph, *, max_edge_um: float, min_cluste
                     inter_frac += 1
                     inter_area = shapely.union_all([shapely.intersection(h, hb[k]) for k in hit]).area
                     ratios.append(inter_area / (h.area + _EPS))
-            out[f"spatil__{a}cl_intersect_{b}cl__frac"] = inter_frac / len(ha)
-            out[f"spatil__{a}cl_overlap_{b}cl__mean_ratio"] = float(np.mean(ratios)) if ratios else 0.0
+            out[f"spatil__{a}_cluster_meets_{b}_cluster__frac"] = inter_frac / len(ha)
+            out[f"spatil__{a}_cluster_overlap_{b}_cluster__mean_ratio"] = float(np.mean(ratios)) if ratios else 0.0
         else:
-            out[f"spatil__{a}cl_intersect_{b}cl__frac"] = np.nan
-            out[f"spatil__{a}cl_overlap_{b}cl__mean_ratio"] = np.nan
+            out[f"spatil__{a}_cluster_meets_{b}_cluster__frac"] = np.nan
+            out[f"spatil__{a}_cluster_overlap_{b}_cluster__mean_ratio"] = np.nan
 
     # ---- infiltration of tumour by immune cells --------------------------- #
     nt, ns = out["spatil__immune_near_tumor__frac"], out["spatil__immune_near_stroma__frac"]
@@ -235,16 +235,16 @@ def _spatil(df: pd.DataFrame, cg: G.CellGraph, *, max_edge_um: float, min_cluste
     tum_imm = nbhd_role[tum_mask, imm_col]
     out |= _stat_block(tum_imm, "spatil__tumor_local_immune_frac", lo=50)
     deg_imm = (cg.adj @ (role_arr == "immune").astype(float))
-    out["spatil__tumor_adj_immune_frac"] = float((deg_imm[tum_mask] > 0).mean()) if tum_mask.any() else np.nan
+    out["spatil__tumor_with_immune_neighbor_frac"] = float((deg_imm[tum_mask] > 0).mean()) if tum_mask.any() else np.nan
 
-    # ---- homophily and immune-tumour assortativity (edge-level) ----------- #
+    # ---- same-role neighbour fraction and immune-tumour edge enrichment ---- #
     for r in SPATIL_ROLES:
         m = role_arr == r
         if m.any() and len(cg.edges):
             same = nbhd_role[m, ROLES.index(r)]
-            out[f"spatil__{r}_homophily"] = float(np.nanmean(same))
+            out[f"spatil__{r}_same_role_frac"] = float(np.nanmean(same))
         else:
-            out[f"spatil__{r}_homophily"] = np.nan
+            out[f"spatil__{r}_same_role_frac"] = np.nan
     if len(cg.edges):
         ei, ej = cg.edges[:, 0], cg.edges[:, 1]
         ri, rj = role_arr[ei], role_arr[ej]
@@ -252,18 +252,18 @@ def _spatil(df: pd.DataFrame, cg: G.CellGraph, *, max_edge_um: float, min_cluste
         p_i = float((role_arr == "immune").mean())
         p_t = float((role_arr == "tumor").mean())
         expected = 2.0 * p_i * p_t * len(cg.edges)
-        out["spatil__immune_tumor_assortativity"] = float(np.log((n_it + _EPS) / (expected + _EPS)))
+        out["spatil__immune_tumor_edge_enrichment"] = float(np.log((n_it + _EPS) / (expected + _EPS)))
     else:
-        out["spatil__immune_tumor_assortativity"] = np.nan
+        out["spatil__immune_tumor_edge_enrichment"] = np.nan
 
     # ---- immune dispersion: observed vs random nearest-neighbour spacing --- #
     if len(xy["immune"]) >= 3:
         nn = G.knn_distances(xy["immune"], xy["immune"], k=2)[:, 1]
         tissue_um2 = _tissue_area_mm2(xy_all) * 1e6
         expected_nn = 0.5 / np.sqrt(len(xy["immune"]) / (tissue_um2 + _EPS)) if np.isfinite(tissue_um2) else np.nan
-        out["spatil__immune_dispersion_index"] = float(np.mean(nn) / (expected_nn + _EPS)) if np.isfinite(expected_nn) else np.nan
+        out["spatil__immune_spatial_dispersion"] = float(np.mean(nn) / (expected_nn + _EPS)) if np.isfinite(expected_nn) else np.nan
     else:
-        out["spatil__immune_dispersion_index"] = np.nan
+        out["spatil__immune_spatial_dispersion"] = np.nan
     return out
 
 
@@ -291,12 +291,12 @@ def extract_features(
     tissue_mm2 = _tissue_area_mm2(xy)
 
     out: dict[str, float] = {}
-    out["meta__n_cells"] = float(len(df))
-    out["meta__tissue_area_mm2"] = float(tissue_mm2)
-    out["meta__mean_degree"] = float(cg.degree.mean()) if cg.n else np.nan
+    out["slide__n_cells"] = float(len(df))
+    out["slide__tissue_area_mm2"] = float(tissue_mm2)
+    out["slide__mean_neighbors_per_cell"] = float(cg.degree.mean()) if cg.n else np.nan
     out |= _composition(df, tissue_mm2)
-    out |= _morph_global(df)
-    out |= _heterogeneity(df, cg)
+    out |= _morphometry(df)
+    out |= _diversity(df, cg)
     out |= _spatil(df, cg, max_edge_um=max_edge_um, min_cluster=min_cluster, near_um=near_um)
     return out
 
