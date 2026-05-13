@@ -2,11 +2,16 @@
 trident_output/
 histoplus_output/
 *.svs
+*.svs.broken
 *.h5
 *.json
 !**/*.example.json
 *.csv
 *.parquet
+
+# …but do track the small handcrafted-feature output (stage 3)
+!features/penile_features.parquet
+!features/penile_features.csv
 
 # logs
 logs/
@@ -15,3 +20,6 @@ logs/
 __pycache__/
 *.pyc
 .ipynb_checkpoints/
+
+# macOS
+.DS_Store
