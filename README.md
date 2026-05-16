@@ -14,8 +14,9 @@ Only code and the 145-feature table are tracked; WSIs and intermediate outputs a
 scripts/                       gu-side shell drivers for stages 1–2
 histoplus_penile/              python package for stages 1–2
 pathomics/                     python package for stage 3
-cell_masks_to_geojson.py       histoplus json → QuPath GeoJSON
-features/penile_features.*     stage-3 output (26 slides × 145 features)
+  io.py, morphology.py, graph.py, features.py, qupath.py, viz.py, __main__.py
+cell_masks_to_geojson.py       histoplus json → QuPath GeoJSON (cells, no measurements)
+features/penile_features.*     stage-3 output (26 slides × 144 features)
 ```
 
 ## Requirements
@@ -98,7 +99,35 @@ viz.plot_heterogeneity(cells, "area")
 viz.plot_graph(cells)
 ```
 
-Also: `python cell_masks_to_geojson.py` → one QuPath-importable GeoJSON per slide (cells classified by type, stable colours).
+### Visualisations in QuPath
+
+`pathomics.qupath` exports three GeoJSON overlays you can drag onto a slide in QuPath (level-0 pixel coords, classifications + colours baked in):
+
+| export | what it shows |
+|---|---|
+| `qupath_clusters.geojson` | convex hull of every spaTIL cluster, one annotation per cluster, classified as `immune_cluster` / `tumor_cluster` / `stroma_cluster` (teal / orange / grey) — the WSI-level spaTIL view |
+| `qupath_edges_<A>_<B>.geojson` | Delaunay edges connecting cells of two roles only (default immune ↔ tumor) as LineString annotations — the spatial interaction graph at slide scale, subsampled to ≤ `max_edges` |
+| `qupath_cells.geojson` | every cell as a detection classified by cell type, with per-cell measurements baked in: `neighborhood_immune_frac`, `neighborhood_tumor_frac`, `neighborhood_mixedness`, `area_local_sd_um2`, `eccentricity_local_sd`, `circularity_local_sd`, plus `area_um2 / eccentricity / circularity / solidity / confidence`. QuPath's *Measure → Show Detection Measurements → Show Measurement Maps* paints any of them as a heatmap |
+
+Batch CLI:
+
+```bash
+python -m pathomics.qupath histoplus_output --clusters --interactions --measurements
+```
+
+Or from Python:
+
+```python
+from pathomics import load_cells, qupath
+cells = load_cells("histoplus_output/MPe08B/cell_masks.json")
+qupath.export_cluster_hulls(cells,    "histoplus_output/MPe08B/qupath_clusters.geojson",       src_path="histoplus_output/MPe08B/cell_masks.json")
+qupath.export_interaction_graph(cells,"histoplus_output/MPe08B/qupath_edges_immune_tumor.geojson", src_path="histoplus_output/MPe08B/cell_masks.json")
+qupath.export_cells_with_measurements("histoplus_output/MPe08B/cell_masks.json", "histoplus_output/MPe08B/qupath_cells.geojson")
+```
+
+Sizes for reference (MPe08B, 135 k cells): clusters 0.4 MB, edges 5 MB, cells 188 MB.
+
+Also: `python cell_masks_to_geojson.py` → one QuPath-importable GeoJSON per slide (cells classified by type, no measurements — superseded by `qupath_cells.geojson` once you generate it).
 
 ### Design
 

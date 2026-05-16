@@ -18,10 +18,10 @@ or batch a folder from the command line::
 """
 from .io import DEFAULT_ROLES, load_cells
 from .features import extract_features, extract_features_roi
-from . import graph, morphology, viz
+from . import graph, morphology, qupath, viz
 
 __all__ = [
     "load_cells", "DEFAULT_ROLES",
     "extract_features", "extract_features_roi",
-    "graph", "morphology", "viz",
+    "graph", "morphology", "qupath", "viz",
 ]
